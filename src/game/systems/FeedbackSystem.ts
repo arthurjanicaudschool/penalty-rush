@@ -10,18 +10,20 @@ export class FeedbackSystem {
   }
 
   private static tone(frequency: number, duration: number, gainValue: number, type: OscillatorType = 'sine', delay = 0): void {
-    const context = this.getContext();
-    if (!context) return;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const start = context.currentTime + delay;
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, start);
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(gainValue, start + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start(start); oscillator.stop(start + duration + 0.02);
+    try {
+      const context = this.getContext();
+      if (!context) return;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = context.currentTime + delay;
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(gainValue, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(start); oscillator.stop(start + duration + 0.02);
+    } catch { /* Feedback audio is optional. */ }
   }
 
   static shot(power: number): void {

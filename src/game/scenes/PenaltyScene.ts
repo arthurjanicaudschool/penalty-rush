@@ -38,6 +38,7 @@ export class PenaltyScene extends Phaser.Scene {
   private shooterText!: Phaser.GameObjects.Text;
   private squad: SquadPlayer[] = [];
   private pauseOverlay?: Phaser.GameObjects.Container;
+  private debugText?: Phaser.GameObjects.Text;
 
   constructor() { super('PenaltyScene'); }
 
@@ -64,6 +65,7 @@ export class PenaltyScene extends Phaser.Scene {
     this.add.text(220, 170, `GARDIEN ${opponent.name.toUpperCase()}`, { fontFamily: BODY_FONT, fontSize: '7px', fontStyle: 'bold', color: '#8297a1' }).setOrigin(0, 0.5);
     this.ball = new Ball(this, 195, 683);
     this.createShotPrompt();
+    this.createDebugPanel();
     this.swipe = new SwipeController(this, new Phaser.Math.Vector2(195, 683), (input) => this.shoot(input));
     this.events.once('shutdown', () => this.swipe.destroy());
     this.introMotion();
@@ -156,12 +158,44 @@ export class PenaltyScene extends Phaser.Scene {
     this.tweens.add({ targets: this.keeper, alpha: 1, y: 342, duration: 280, ease: 'Cubic.Out' });
   }
 
+  private createDebugPanel(): void {
+    this.debugText = this.add.text(12, 232, 'SCENE DEBUG: ready', {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      color: '#35e8ff',
+      backgroundColor: '#05080dcc',
+      padding: { x: 6, y: 5 }
+    }).setDepth(201);
+  }
+
+  private debug(label: string, extra = ''): void {
+    this.debugText?.setText([
+      'SCENE DEBUG',
+      `event: ${label}`,
+      `swipe enabled: ${this.swipe?.enabled ? 'yes' : 'no'}`,
+      `shotCount: ${this.shotCount}`,
+      `ball: ${Math.round(this.ball?.x ?? -1)},${Math.round(this.ball?.y ?? -1)}`,
+      extra
+    ].filter(Boolean).join('\n'));
+  }
+
+  private safeVibrate(pattern: VibratePattern): void {
+    try {
+      if (typeof navigator.vibrate === 'function') navigator.vibrate(pattern);
+    } catch { /* Haptics are optional and must never block gameplay. */ }
+  }
+
   private shoot(input: { dx: number; dy: number; distance: number; duration: number; curve: number }): void {
-    if (!this.swipe.enabled) return;
+    this.debug('shoot called', `dx:${Math.round(input.dx)} dy:${Math.round(input.dy)} dist:${Math.round(input.distance)}`);
+    if (!this.swipe.enabled) {
+      this.debug('shoot blocked: swipe disabled', `dx:${Math.round(input.dx)} dy:${Math.round(input.dy)} dist:${Math.round(input.distance)}`);
+      return;
+    }
     this.swipe.enabled = false;
     const challenge = ChallengeSystem.getToday();
     const intent = this.keeperAI.decide(gameState.challengeMode ? challenge.keeperBonus ?? 0 : 0);
     const result = this.shotSystem.resolve(input, intent, this.perfectZone);
+    this.debug('shot resolved', `target:${Math.round(result.targetX)},${Math.round(result.targetY)} outcome:${result.outcome} power:${result.power.toFixed(2)}`);
     this.keeperAI.record(result.zone); this.zones.push(result.zone); this.accuracyTotal += result.accuracy;
     const awarded = this.scoreSystem.addShot(result);
     FeedbackSystem.shot(result.power);
@@ -172,6 +206,8 @@ export class PenaltyScene extends Phaser.Scene {
   }
 
   private animateBall(result: ShotResult): void {
+    this.ball.setDepth(24);
+    this.debug('animate ball start', `from:${Math.round(this.ball.x)},${Math.round(this.ball.y)} to:${Math.round(result.targetX)},${Math.round(result.targetY)}`);
     const trailColor = result.outcome === 'goal' ? COLORS.lime : COLORS.cyan;
     for (let i = 0; i < 6; i += 1) {
       const t = i / 6;
@@ -185,7 +221,9 @@ export class PenaltyScene extends Phaser.Scene {
       this.ball.x = Phaser.Math.Interpolation.QuadraticBezier(progress.value, 195, controlX, result.targetX);
       this.ball.y = Phaser.Math.Interpolation.QuadraticBezier(progress.value, 683, controlY, result.targetY);
       this.ball.setScale(1 - progress.value * 0.66).setAngle(progress.value * (420 + result.curve * 160));
+      this.debug('animate ball update', `p:${progress.value.toFixed(2)} ball:${Math.round(this.ball.x)},${Math.round(this.ball.y)}`);
     }, onComplete: () => {
+      this.debug('animate ball complete', `ball:${Math.round(this.ball.x)},${Math.round(this.ball.y)} outcome:${result.outcome}`);
       if (result.outcome === 'goal') { this.cameras.main.shake(85, 0.005); this.burst(result.targetX, result.targetY, COLORS.lime); }
     }});
   }
@@ -197,15 +235,15 @@ export class PenaltyScene extends Phaser.Scene {
     const banner = this.add.graphics().setDepth(29).fillStyle(0x05080d, 0.88).fillRoundedRect(54, 480, 282, 92, 22).lineStyle(1, result.outcome === 'goal' ? COLORS.lime : COLORS.red, 0.35).strokeRoundedRect(54, 480, 282, 92, 22);
     const feedback = this.add.text(195, 491, labels[result.outcome], { fontFamily: DISPLAY_FONT, fontSize: '41px', fontStyle: 'bold italic', color, stroke: '#05080d', strokeThickness: 4 }).setOrigin(0.5, 0).setDepth(30).setScale(0.6);
     const detail = this.add.text(195, 538, result.outcome === 'goal' ? `+${formatScore(awarded)}  •  SÉRIE x${this.scoreSystem.streak}` : result.outcome === 'saved' ? 'LE GARDIEN T’AVAIT LU' : 'DOSE UN PEU MOINS', { fontFamily: BODY_FONT, fontSize: '10px', fontStyle: 'bold', color: '#d6e2e7', letterSpacing: 0.55 }).setOrigin(0.5).setDepth(30);
-    this.tweens.add({ targets: feedback, scale: 1, duration: 210, ease: 'Back.Out' });
-    if (result.outcome === 'goal') FeedbackSystem.goal(); else FeedbackSystem.fail();
-    this.scoreText.setText(formatScore(this.scoreSystem.score));
-    this.tweens.add({ targets: this.scoreText, scale: 1.18, color: '#caff38', yoyo: true, duration: 110 });
-    if ('vibrate' in navigator) navigator.vibrate(result.outcome === 'goal' ? [18, 35, 28] : 25);
     this.time.delayedCall(760, () => {
       banner.destroy(); feedback.destroy(); detail.destroy();
       if (this.shotCount >= 5) this.finishGame(); else this.resetShot();
     });
+    this.tweens.add({ targets: feedback, scale: 1, duration: 210, ease: 'Back.Out' });
+    if (result.outcome === 'goal') FeedbackSystem.goal(); else FeedbackSystem.fail();
+    this.scoreText.setText(formatScore(this.scoreSystem.score));
+    this.tweens.add({ targets: this.scoreText, scale: 1.18, color: '#caff38', yoyo: true, duration: 110 });
+    this.safeVibrate(result.outcome === 'goal' ? [18, 35, 28] : 25);
   }
 
   private burst(x: number, y: number, color: number): void {
