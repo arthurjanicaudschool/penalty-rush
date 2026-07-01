@@ -1,8 +1,18 @@
-:root { color-scheme: dark; font-family: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #05080d; color: #f7fff9; }
+:root { --app-height: 100vh; color-scheme: dark; font-family: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #05080d; color: #f7fff9; }
+@supports (height: 100dvh) { :root { --app-height: 100dvh; } }
 * { box-sizing: border-box; }
-html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #05080d; }
-body { position: fixed; inset: 0; min-height: 100dvh; touch-action: manipulation; }
-#game { position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow: hidden; background: #05080d; }
+html, body { width: 100%; height: var(--app-height); margin: 0; overflow: hidden; overscroll-behavior: none; background: #05080d; }
+body { position: fixed; inset: 0; min-height: var(--app-height); touch-action: manipulation; -webkit-overflow-scrolling: auto; }
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: var(--app-height);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 25%, rgba(53, 232, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, #182f3a 0%, #10232d 24%, #05080d 54%, #0a201c 100%);
+}
 canvas { display: block; touch-action: none; }
 #orientation-hint { display: none; position: fixed; inset: 0; z-index: 10; place-items: center; padding: 32px; text-align: center; font-size: 18px; font-weight: 700; background: #05080d; }
 @media (orientation: landscape) and (max-height: 540px) { #orientation-hint { display: grid; } #game { visibility: hidden; } }

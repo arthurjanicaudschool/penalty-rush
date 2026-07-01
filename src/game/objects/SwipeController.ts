@@ -8,19 +8,10 @@ export class SwipeController {
   private lastPosition = new Phaser.Math.Vector2();
   private path: Phaser.Math.Vector2[] = [];
   private guide: Phaser.GameObjects.Graphics;
-  private debugText: Phaser.GameObjects.Text;
-  private debugCount = 0;
   enabled = true;
 
   constructor(private scene: Phaser.Scene, private origin: Phaser.Math.Vector2, private onShot: (shot: ShotInput) => void) {
     this.guide = scene.add.graphics().setDepth(20);
-    this.debugText = scene.add.text(12, 146, 'SWIPE DEBUG: ready', {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#caff38',
-      backgroundColor: '#05080dcc',
-      padding: { x: 6, y: 5 }
-    }).setDepth(200);
     scene.input.on('pointerdown', this.pointerDown, this);
     scene.input.on('pointermove', this.pointerMove, this);
     scene.input.on('pointerup', this.pointerUp, this);
@@ -35,20 +26,6 @@ export class SwipeController {
 
   private worldPosition(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
     return pointer.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;
-  }
-
-  private debug(label: string, extra = ''): void {
-    this.debugCount += 1;
-    const active = this.start ? 'yes' : 'no';
-    const last = `${Math.round(this.lastPosition.x)},${Math.round(this.lastPosition.y)}`;
-    this.debugText.setText([
-      `SWIPE DEBUG #${this.debugCount}`,
-      `event: ${label}`,
-      `enabled: ${this.enabled ? 'yes' : 'no'} active: ${active}`,
-      `pid: ${this.activePointerId ?? '-'} tid: ${this.activeTouchId ?? '-'}`,
-      `points: ${this.path.length} last: ${last}`,
-      extra
-    ].filter(Boolean).join('\n'));
   }
 
   private worldPositionFromClient(clientX: number, clientY: number): Phaser.Math.Vector2 {
@@ -67,26 +44,18 @@ export class SwipeController {
 
   private begin(position: Phaser.Math.Vector2): boolean {
     const originDistance = Phaser.Math.Distance.Between(position.x, position.y, this.origin.x, this.origin.y);
-    if (!this.enabled || originDistance > 130) {
-      this.debug('begin rejected', `x:${Math.round(position.x)} y:${Math.round(position.y)} originDist:${Math.round(originDistance)}`);
-      return false;
-    }
+    if (!this.enabled || originDistance > 130) return false;
     this.start = { x: position.x, y: position.y, time: this.scene.time.now };
     this.lastPosition.set(position.x, position.y);
     this.path = [new Phaser.Math.Vector2(position.x, position.y)];
-    this.debug('begin ok', `x:${Math.round(position.x)} y:${Math.round(position.y)}`);
     return true;
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.isTouchPointer(pointer)) {
-      this.debug('pointerdown touch ignored', `id:${pointer.id}`);
-      return;
-    }
+    if (this.isTouchPointer(pointer)) return;
     const position = this.worldPosition(pointer);
     if (!this.begin(position)) return;
     this.activePointerId = pointer.id;
-    this.debug('pointerdown mouse', `id:${pointer.id}`);
     const event = pointer.event as PointerEvent;
     if (event.pointerId !== undefined && event.currentTarget instanceof Element && 'setPointerCapture' in event.currentTarget) {
       try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Browser may already own capture. */ }
@@ -94,17 +63,10 @@ export class SwipeController {
   }
 
   private pointerMove(pointer: Phaser.Input.Pointer): void {
-    if (this.isTouchPointer(pointer)) {
-      this.debug('pointermove touch ignored', `id:${pointer.id}`);
-      return;
-    }
-    if (!this.start || (this.activePointerId !== undefined && pointer.id !== this.activePointerId)) {
-      this.debug('pointermove ignored', `id:${pointer.id}`);
-      return;
-    }
+    if (this.isTouchPointer(pointer)) return;
+    if (!this.start || (this.activePointerId !== undefined && pointer.id !== this.activePointerId)) return;
     const position = this.worldPosition(pointer);
     this.updatePath(position);
-    this.debug('pointermove mouse', `x:${Math.round(position.x)} y:${Math.round(position.y)}`);
   }
 
   private updatePath(position: Phaser.Math.Vector2): void {
@@ -136,71 +98,47 @@ export class SwipeController {
   }
 
   private pointerUp(pointer: Phaser.Input.Pointer): void {
-    if (!this.start) {
-      this.debug('pointerup no start', `id:${pointer.id}`);
-      return;
-    }
+    if (!this.start) return;
     const position = this.worldPosition(pointer);
     const fallback = this.path[this.path.length - 1] ?? this.lastPosition;
     const releaseDistance = Phaser.Math.Distance.Between(position.x, position.y, this.start.x, this.start.y);
     const finalPosition = releaseDistance > 8 ? position : fallback;
-    this.debug('pointerup', `x:${Math.round(finalPosition.x)} y:${Math.round(finalPosition.y)} releaseDist:${Math.round(releaseDistance)}`);
     this.finish(finalPosition.x, finalPosition.y);
   }
 
   private nativePointerUp = (): void => {
-    if (!this.start || this.activeTouchId !== undefined) {
-      this.debug('native pointerup ignored');
-      return;
-    }
+    if (!this.start || this.activeTouchId !== undefined) return;
     const position = this.path[this.path.length - 1] ?? this.lastPosition;
-    this.debug('native pointerup', `x:${Math.round(position.x)} y:${Math.round(position.y)}`);
     this.finish(position.x, position.y);
   };
 
   private touchStart = (event: TouchEvent): void => {
-    if (event.changedTouches.length === 0) {
-      this.debug('touchstart empty');
-      return;
-    }
+    if (event.changedTouches.length === 0) return;
     const touch = event.changedTouches[0];
     if (this.start) {
       this.activeTouchId = touch.identifier;
-      this.debug('touchstart existing', `tid:${touch.identifier}`);
       event.preventDefault();
       return;
     }
     const position = this.worldPositionFromClient(touch.clientX, touch.clientY);
     if (!this.begin(position)) return;
     this.activeTouchId = touch.identifier;
-    this.debug('touchstart', `tid:${touch.identifier} x:${Math.round(position.x)} y:${Math.round(position.y)}`);
     event.preventDefault();
   };
 
   private touchMove = (event: TouchEvent): void => {
-    if (!this.start) {
-      this.debug('touchmove no start');
-      return;
-    }
+    if (!this.start) return;
     const touch = this.activeTouchId === undefined ? event.touches.item(0) : this.findTouch(event.touches);
-    if (!touch) {
-      this.debug('touchmove no matching touch');
-      return;
-    }
+    if (!touch) return;
     const position = this.worldPositionFromClient(touch.clientX, touch.clientY);
     this.updatePath(position);
-    this.debug('touchmove', `x:${Math.round(position.x)} y:${Math.round(position.y)}`);
     event.preventDefault();
   };
 
   private touchEnd = (event: TouchEvent): void => {
-    if (!this.start) {
-      this.debug('touchend no start');
-      return;
-    }
+    if (!this.start) return;
     const touch = this.activeTouchId === undefined ? event.changedTouches.item(0) : this.findTouch(event.changedTouches);
     const position = touch ? this.worldPositionFromClient(touch.clientX, touch.clientY) : this.path[this.path.length - 1] ?? this.lastPosition;
-    this.debug('touchend', `touch:${touch ? 'yes' : 'fallback'} x:${Math.round(position.x)} y:${Math.round(position.y)}`);
     this.finish(position.x, position.y);
     event.preventDefault();
   };
@@ -239,13 +177,10 @@ export class SwipeController {
     const curve = Phaser.Math.Clamp((middle.x - expectedX) / 65, -1, 1);
     this.start = undefined; this.activePointerId = undefined; this.activeTouchId = undefined; this.path = []; this.guide.clear();
     if (distance >= 42 && dy < -18) {
-      this.debug('SHOT OK', `dx:${Math.round(dx)} dy:${Math.round(dy)} dist:${Math.round(distance)} curve:${curve.toFixed(2)}`);
       this.onShot({ dx, dy, distance, duration, curve });
       try {
         if (typeof navigator.vibrate === 'function') navigator.vibrate(12);
       } catch { /* Haptics are optional and must never block gameplay. */ }
-    } else {
-      this.debug('SHOT REJECTED', `dx:${Math.round(dx)} dy:${Math.round(dy)} dist:${Math.round(distance)} need dist>=42 dy<-18`);
     }
   }
 
@@ -260,7 +195,6 @@ export class SwipeController {
     window.removeEventListener('touchmove', this.touchMove, true);
     window.removeEventListener('touchend', this.touchEnd, true);
     window.removeEventListener('touchcancel', this.touchEnd, true);
-    this.debugText.destroy();
     this.guide.destroy();
   }
 }

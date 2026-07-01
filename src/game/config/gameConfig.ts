@@ -20,7 +20,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#05080d',
   render: { antialias: true, antialiasGL: true, pixelArt: false, roundPixels: false },
   scale: {
-    mode: Phaser.Scale.ENVELOP,
+    mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     fullscreenTarget: 'game',
     expandParent: true

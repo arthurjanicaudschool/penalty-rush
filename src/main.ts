@@ -9,7 +9,9 @@ import '@fontsource/manrope/latin-700.css';
 import './style.css';
 import { gameConfig } from './game/config/gameConfig';
 import { setupInstallPrompt } from './pwa/installPrompt';
+import { setupAppViewport } from './ui/appViewport';
 
+setupAppViewport();
 registerSW({ immediate: true });
 setupInstallPrompt();
 void Promise.race([

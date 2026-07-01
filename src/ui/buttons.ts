@@ -8,7 +8,7 @@ export const createButton = (
   y: number,
   label: string,
   onClick: () => void,
-  options: { width?: number; primary?: boolean } = {}
+  options: { width?: number; primary?: boolean; immediate?: boolean } = {}
 ): Phaser.GameObjects.Container => {
   const width = options.width ?? 310;
   const primary = options.primary ?? true;
@@ -25,7 +25,14 @@ export const createButton = (
   const container = scene.add.container(x, y, [shadow, bg, text, arrow, hit]);
   hit.on('pointerdown', () => container.setScale(0.975));
   hit.on('pointerout', () => container.setScale(1));
-  hit.on('pointerup', () => { container.setScale(1); scene.tweens.add({ targets: container, scale: 1.025, yoyo: true, duration: 70, onComplete: onClick }); });
+  hit.on('pointerup', () => {
+    container.setScale(1);
+    if (options.immediate) {
+      onClick();
+      return;
+    }
+    scene.tweens.add({ targets: container, scale: 1.025, yoyo: true, duration: 70, onComplete: onClick });
+  });
   return container;
 };
 
